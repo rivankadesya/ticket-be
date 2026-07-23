@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const { initializeDatabase } = require('./models');
@@ -11,6 +13,23 @@ const commentRoutes = require('./routes/commentRoutes');
 const pusherRoutes = require('./routes/pusherRoutes');
 
 const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : '*',
+    credentials: true,
+  },
+});
+
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log('Socket connected:', socket.id);
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected:', socket.id);
+  });
+});
 
 app.use(helmet());
 app.use(cors({
@@ -40,7 +59,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await initializeDatabase();
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {

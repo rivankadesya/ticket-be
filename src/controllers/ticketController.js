@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const { validationResult } = require('express-validator');
 const { publishToUsers } = require('../services/pusher');
+const { emit } = require('../services/socketEmitter');
 
 const createTicket = async (req, res) => {
   const client = await pool.connect();
@@ -33,11 +34,12 @@ const createTicket = async (req, res) => {
 
     await client.query('COMMIT');
 
+    emit(req.app.get('io'), 'tickets', 'created', { ticket_id: ticket.id });
+
     publishToUsers(
       assigned_to,
       'Tiket Baru Ditugaskan',
-      `"${title}" — prioritas ${priority}`,
-      { ticket_id: ticket.id, deep_link: `/dashboard` }
+      `"${title}" — prioritas ${priority}`
     );
 
     res.status(201).json({
@@ -221,6 +223,8 @@ const updateTicket = async (req, res) => {
 
     await client.query('COMMIT');
 
+    emit(req.app.get('io'), 'tickets', 'updated', { ticket_id: id });
+
     const updateTargets = [...new Set([
       ticket.created_by,
       ...(assigned_to || []),
@@ -234,8 +238,7 @@ const updateTicket = async (req, res) => {
       publishToUsers(
         updateTargets,
         'Tiket Diperbarui',
-        `"${ticket.title}" — ${changeParts.join(', ')}`,
-        { ticket_id: id, deep_link: `/dashboard` }
+        `"${ticket.title}" — ${changeParts.join(', ')}`
       );
     }
 
@@ -268,6 +271,8 @@ const deleteTicket = async (req, res) => {
     }
 
     await pool.query('DELETE FROM tickets WHERE id = $1', [id]);
+
+    emit(req.app.get('io'), 'tickets', 'deleted', { ticket_id: id });
 
     res.status(200).json({
       message: 'Ticket deleted successfully',

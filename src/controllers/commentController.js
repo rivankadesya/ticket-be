@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { emit } = require('../services/socketEmitter');
 
 const addComment = async (req, res) => {
   try {
@@ -19,6 +20,8 @@ const addComment = async (req, res) => {
       'INSERT INTO ticket_comments (ticket_id, user_id, comment) VALUES ($1, $2, $3) RETURNING *',
       [ticket_id, user_id, comment]
     );
+
+    emit(req.app.get('io'), 'comments', 'added', { ticket_id });
 
     res.status(201).json({
       message: 'Comment added successfully',

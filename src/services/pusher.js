@@ -23,7 +23,7 @@ const generateToken = (userId) => {
   return client.generateToken(userId);
 };
 
-const publishToUsers = async (userIds, title, body, data = {}) => {
+const publishToUsers = async (userIds, title, body) => {
   if (!userIds || userIds.length === 0) return;
 
   const client = getBeamsClient();
@@ -32,14 +32,8 @@ const publishToUsers = async (userIds, title, body, data = {}) => {
   try {
     await client.publishToUsers(userIds, {
       web: {
-        notification: {
-          title,
-          body,
-          deep_link: data.deep_link || '/dashboard',
-          icon: '/logo192.png',
-        },
+        notification: { title, body },
       },
-      data,
     });
   } catch (error) {
     console.error('Pusher publish error:', error);
