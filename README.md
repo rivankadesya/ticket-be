@@ -19,6 +19,7 @@ Backend REST API untuk dashboard tiket IT Support, menangani autentikasi penggun
 | **cors** (v2) | Cross-Origin Resource Sharing |
 | **dotenv** (v16) | Konfigurasi environment variable |
 | **nodemon** (v3, dev) | Auto-restart saat development |
+| **@pusher/push-notifications-server** (v2) | Push notification engine (Pusher Beams) |
 
 ---
 
@@ -44,7 +45,11 @@ backend/
 │   ├── routes/
 │   │   ├── authRoutes.js       # Route /api/auth/*
 │   │   ├── ticketRoutes.js     # Route /api/tickets/*
-│   │   └── commentRoutes.js    # Route /api/tickets/:ticket_id/comments/*
+│   │   ├── commentRoutes.js    # Route /api/tickets/:ticket_id/comments/*
+│   │   └── pusherRoutes.js     # Route /api/pusher/*
+│   │
+│   ├── services/
+│   │   └── pusher.js           # Pusher Beams client & publish helpers
 │   │
 │   ├── utils/
 │   │   └── validators.js       # Aturan validasi express-validator
@@ -146,6 +151,12 @@ users ──1:N── tickets ──1:N── ticket_comments
 | POST | `/api/tickets/:ticket_id/comments` | ✓ | Tambah komentar |
 | GET | `/api/tickets/:ticket_id/comments` | ✓ | Ambil komentar (urut DESC) |
 
+### Pusher Beams — `/api/pusher`
+
+| Method | Endpoint | Auth | Deskripsi |
+|---|---|---|---|
+| POST | `/api/pusher/beams-auth` | ✓ | Generate token autentikasi Pusher Beams untuk user |
+
 ### Health Check
 
 | Method | Endpoint | Deskripsi |
@@ -177,7 +188,14 @@ Tiket dapat memiliki banyak assignee melalui tabel `ticket_assignments` (relasi 
 ### 3. Short-Polling untuk Real-Time
 Backend menggunakan arsitektur REST stateless (tanpa WebSocket). Sinkronisasi real-time di-handle sepenuhnya oleh frontend melalui polling berkala (setiap 5 detik untuk tiket, 3 detik untuk komentar).
 
-### 4. Transaksi Database
+### 4. Push Notification (Pusher Beams)
+Backend terintegrasi dengan **Pusher Beams** untuk mengirim notifikasi push ke browser pengguna secara real-time.
+
+- **Beams Auth** (`POST /api/pusher/beams-auth`) — Frontend memanggil endpoint ini setelah login untuk mendapatkan token autentikasi Pusher yang ditandatangani dengan `secretKey`.
+- **Publish on Events** — Saat tiket dibuat, notifikasi dikirim ke semua assignee. Saat tiket diperbarui (status/priority berubah), notifikasi dikirim ke creator dan semua assignee.
+- **Graceful degredation** — Jika credential Pusher tidak dikonfigurasi di `.env`, seluruh fitur push notification dinonaktifkan tanpa menyebabkan error.
+
+### 5. Transaksi Database
 Operasi yang memodifikasi banyak tabel (create/update ticket dengan assignments) dibungkus dalam `BEGIN/COMMIT/ROLLBACK` untuk menjaga atomicity.
 
 ---
@@ -203,6 +221,8 @@ DATABASE_URL=postgresql://user:password@localhost:5432/it_support_tickets
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRE=7d
 BCRYPT_ROUNDS=10
+PUSHER_BEAMS_INSTANCE_ID=your_instance_id
+PUSHER_BEAMS_SECRET_KEY=your_secret_key
 ```
 
 5. Jalankan server (tabel database akan otomatis dibuat saat pertama kali server dijalankan):
