@@ -60,6 +60,23 @@
               "path": ["auth", "login"]
             }
           }
+        },
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "users"]
+            }
+          }
         }
       ]
     },
@@ -82,7 +99,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Cannot access email\",\n  \"description\": \"User unable to access company email\",\n  \"category\": \"Email\",\n  \"priority\": \"High\",\n  \"assigned_to\": null\n}"
+              "raw": "{\n  \"title\": \"Cannot access email\",\n  \"description\": \"User unable to access company email\",\n  \"category\": \"Email\",\n  \"priority\": \"High\",\n  \"assigned_to\": [\"user-uuid-1\", \"user-uuid-2\"]\n}"
             },
             "url": {
               "raw": "{{base_url}}/tickets",
@@ -187,7 +204,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Cannot access email - URGENT\",\n  \"status\": \"In Progress\",\n  \"priority\": \"Critical\"\n}"
+              "raw": "{\n  \"title\": \"Cannot access email - URGENT\",\n  \"status\": \"In Progress\",\n  \"priority\": \"Critical\",\n  \"assigned_to\": [\"user-uuid-1\"]\n}"
             },
             "url": {
               "raw": "{{base_url}}/tickets/{{ticket_id}}",
@@ -283,7 +300,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:5000/api"
+      "value": "http://localhost:5001/api"
     },
     {
       "key": "jwt_token",

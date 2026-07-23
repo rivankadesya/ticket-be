@@ -88,4 +88,14 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+const getUsers = async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, email, role FROM users WHERE is_active = true ORDER BY name ASC');
+    res.status(200).json({ users: result.rows });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+module.exports = { register, login, getUsers };

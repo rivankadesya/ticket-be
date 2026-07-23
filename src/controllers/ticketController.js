@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const { validationResult } = require('express-validator');
 
 const createTicket = async (req, res) => {
+  const client = await pool.connect();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -11,18 +12,36 @@ const createTicket = async (req, res) => {
     const { title, description, category, priority, assigned_to } = req.body;
     const created_by = req.userId;
 
-    const result = await pool.query(
-      'INSERT INTO tickets (title, description, category, priority, assigned_to, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [title, description, category, priority, assigned_to || null, created_by]
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      'INSERT INTO tickets (title, description, category, priority, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [title, description, category, priority, created_by]
     );
+    const ticket = result.rows[0];
+
+    // assigned_to is expected to be an array of user IDs
+    if (Array.isArray(assigned_to) && assigned_to.length > 0) {
+      for (const userId of assigned_to) {
+        await client.query(
+          'INSERT INTO ticket_assignments (ticket_id, user_id) VALUES ($1, $2)',
+          [ticket.id, userId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
 
     res.status(201).json({
       message: 'Ticket created successfully',
-      ticket: result.rows[0],
+      ticket,
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Create ticket error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -31,11 +50,17 @@ const getTickets = async (req, res) => {
     const { status, priority, category } = req.query;
     let query = `
       SELECT t.*, 
-        u_assigned.name as assigned_to_name,
-        u_created.name as created_by_name
+        u_created.name as created_by_name,
+        COALESCE(
+          json_agg(
+            json_build_object('id', u_assigned.id, 'name', u_assigned.name)
+          ) FILTER (WHERE u_assigned.id IS NOT NULL),
+          '[]'
+        ) as assignees
       FROM tickets t
-      LEFT JOIN users u_assigned ON t.assigned_to = u_assigned.id
       LEFT JOIN users u_created ON t.created_by = u_created.id
+      LEFT JOIN ticket_assignments ta ON t.id = ta.ticket_id
+      LEFT JOIN users u_assigned ON ta.user_id = u_assigned.id
       WHERE 1=1
     `;
     const params = [];
@@ -53,7 +78,7 @@ const getTickets = async (req, res) => {
       params.push(category);
     }
 
-    query += ' ORDER BY t.created_at DESC';
+    query += ' GROUP BY t.id, u_created.name ORDER BY t.created_at DESC';
 
     const result = await pool.query(query, params);
     res.status(200).json({
@@ -73,12 +98,19 @@ const getTicketById = async (req, res) => {
 
     const ticketResult = await pool.query(
       `SELECT t.*, 
-        u_assigned.name as assigned_to_name,
-        u_created.name as created_by_name
+        u_created.name as created_by_name,
+        COALESCE(
+          json_agg(
+            json_build_object('id', u_assigned.id, 'name', u_assigned.name)
+          ) FILTER (WHERE u_assigned.id IS NOT NULL),
+          '[]'
+        ) as assignees
       FROM tickets t
-      LEFT JOIN users u_assigned ON t.assigned_to = u_assigned.id
       LEFT JOIN users u_created ON t.created_by = u_created.id
-      WHERE t.id = $1`,
+      LEFT JOIN ticket_assignments ta ON t.id = ta.ticket_id
+      LEFT JOIN users u_assigned ON ta.user_id = u_assigned.id
+      WHERE t.id = $1
+      GROUP BY t.id, u_created.name`,
       [id]
     );
 
@@ -105,6 +137,7 @@ const getTicketById = async (req, res) => {
 };
 
 const updateTicket = async (req, res) => {
+  const client = await pool.connect();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -114,12 +147,25 @@ const updateTicket = async (req, res) => {
     const { id } = req.params;
     const { title, description, category, priority, status, assigned_to } = req.body;
 
-    const ticketResult = await pool.query('SELECT * FROM tickets WHERE id = $1', [id]);
+    const ticketResult = await client.query('SELECT * FROM tickets WHERE id = $1', [id]);
     if (ticketResult.rows.length === 0) {
       return res.status(404).json({ message: 'Ticket not found' });
     }
 
     const ticket = ticketResult.rows[0];
+
+    // Authorization check
+    const isCreator = ticket.created_by === req.userId;
+    const isAdmin = req.userRole === 'admin';
+    const assigneeCheck = await client.query('SELECT 1 FROM ticket_assignments WHERE ticket_id = $1 AND user_id = $2', [id, req.userId]);
+    const isAssignee = assigneeCheck.rows.length > 0;
+
+    if (!isCreator && !isAdmin && !isAssignee) {
+      return res.status(403).json({ message: 'You are not authorized to update this ticket' });
+    }
+
+    await client.query('BEGIN');
+
     const updateFields = [];
     const updateParams = [];
     let paramIndex = 1;
@@ -144,25 +190,38 @@ const updateTicket = async (req, res) => {
       updateFields.push(`status = $${paramIndex++}`);
       updateParams.push(status);
     }
-    if (assigned_to !== undefined) {
-      updateFields.push(`assigned_to = $${paramIndex++}`);
-      updateParams.push(assigned_to || null);
+
+    if (updateFields.length > 0) {
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+      updateParams.push(id);
+      const updateQuery = `UPDATE tickets SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+      await client.query(updateQuery, updateParams);
     }
 
-    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-    updateParams.push(id);
+    // Update assignments
+    if (assigned_to !== undefined) {
+      await client.query('DELETE FROM ticket_assignments WHERE ticket_id = $1', [id]);
+      if (Array.isArray(assigned_to) && assigned_to.length > 0) {
+        for (const userId of assigned_to) {
+          await client.query(
+            'INSERT INTO ticket_assignments (ticket_id, user_id) VALUES ($1, $2)',
+            [id, userId]
+          );
+        }
+      }
+    }
 
-    const updateQuery = `UPDATE tickets SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-
-    const result = await pool.query(updateQuery, updateParams);
+    await client.query('COMMIT');
 
     res.status(200).json({
       message: 'Ticket updated successfully',
-      ticket: result.rows[0],
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Update ticket error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    client.release();
   }
 };
 
@@ -173,6 +232,13 @@ const deleteTicket = async (req, res) => {
     const ticketResult = await pool.query('SELECT * FROM tickets WHERE id = $1', [id]);
     if (ticketResult.rows.length === 0) {
       return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    const ticket = ticketResult.rows[0];
+
+    // Only creator or admin can delete
+    if (ticket.created_by !== req.userId && req.userRole !== 'admin') {
+      return res.status(403).json({ message: 'You are not authorized to delete this ticket' });
     }
 
     await pool.query('DELETE FROM tickets WHERE id = $1', [id]);
@@ -188,18 +254,32 @@ const deleteTicket = async (req, res) => {
 
 const getDashboardMetrics = async (req, res) => {
   try {
-    const metricsResult = await pool.query(`
+    const ticketsResult = await pool.query(`
       SELECT
-        COUNT(*) as total_tickets,
-        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) as open_tickets,
-        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as in_progress_tickets,
-        SUM(CASE WHEN priority = 'High' OR priority = 'Critical' THEN 1 ELSE 0 END) as high_priority_tickets
+        COUNT(*)::integer as total_tickets,
+        COALESCE(SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END), 0)::integer as open_tickets,
+        COALESCE(SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END), 0)::integer as in_progress_tickets,
+        COALESCE(SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END), 0)::integer as resolved_tickets,
+        COALESCE(SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END), 0)::integer as closed_tickets,
+        COALESCE(SUM(CASE WHEN priority = 'Low' THEN 1 ELSE 0 END), 0)::integer as low_priority_tickets,
+        COALESCE(SUM(CASE WHEN priority = 'Medium' THEN 1 ELSE 0 END), 0)::integer as medium_priority_tickets,
+        COALESCE(SUM(CASE WHEN priority = 'High' THEN 1 ELSE 0 END), 0)::integer as high_priority_tickets,
+        COALESCE(SUM(CASE WHEN priority = 'Critical' THEN 1 ELSE 0 END), 0)::integer as critical_priority_tickets
       FROM tickets
     `);
 
+    const usersResult = await pool.query(`
+      SELECT COUNT(*)::integer as total_users FROM users WHERE is_active = true
+    `);
+
+    const metrics = {
+      ...ticketsResult.rows[0],
+      total_users: usersResult.rows[0].total_users
+    };
+
     res.status(200).json({
       message: 'Dashboard metrics retrieved successfully',
-      metrics: metricsResult.rows[0],
+      metrics,
     });
   } catch (error) {
     console.error('Get metrics error:', error);

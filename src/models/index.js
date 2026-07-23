@@ -20,10 +20,15 @@ const createTablesQuery = `
     category VARCHAR(100) NOT NULL,
     priority VARCHAR(50) NOT NULL CHECK (priority IN ('Low', 'Medium', 'High', 'Critical')),
     status VARCHAR(50) NOT NULL CHECK (status IN ('Open', 'In Progress', 'Resolved', 'Closed')) DEFAULT 'Open',
-    assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS ticket_assignments (
+    ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (ticket_id, user_id)
   );
 
   CREATE TABLE IF NOT EXISTS ticket_comments (
@@ -37,8 +42,9 @@ const createTablesQuery = `
 
   CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
   CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
-  CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by);
+  CREATE INDEX IF NOT EXISTS idx_ticket_assignments_ticket_id ON ticket_assignments(ticket_id);
+  CREATE INDEX IF NOT EXISTS idx_ticket_assignments_user_id ON ticket_assignments(user_id);
 `;
 
 const initializeDatabase = async () => {
