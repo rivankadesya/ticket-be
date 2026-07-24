@@ -21,6 +21,7 @@ Backend REST API untuk dashboard tiket IT Support, menangani autentikasi penggun
 | **dotenv** (v16) | Konfigurasi environment variable |
 | **nodemon** (v3, dev) | Auto-restart saat development |
 | **@pusher/push-notifications-server** (v2) | Push notification engine (Pusher Beams) |
+| **pm2** (dev) | Process manager untuk production |
 
 ---
 
@@ -40,8 +41,13 @@ backend/
 │   ├── middleware/
 │   │   └── auth.js                 # Verify JWT token & error handler global
 │   │
+│   ├── migrations/
+│   │   └── 001_initial.sql         # Migrasi database (SQL)
+│   │
+│   ├── migrate.js                  # Runner migrasi database
+│   │
 │   ├── models/
-│   │   └── index.js                # Inisialisasi & migrasi tabel database
+│   │   └── index.js                # (Legacy) Inisialisasi tabel — gunakan migrate
 │   │
 │   ├── routes/
 │   │   ├── authRoutes.js           # Route /api/auth/*
@@ -185,7 +191,7 @@ users ──1:N── tickets ──1:N── ticket_comments
 
 ## Real-Time Sinkronisasi (Socket.IO)
 
-Backend menggunakan **Socket.IO** untuk mengirim event real-time ke semua klien yang terhubung. Setiap klien yang membuka dashboard akan menerima update langsung tanpa perlu polling.
+Backend menggunakan **Socket.IO** untuk mengirim event real-time ke semua klien yang terhubung.
 
 ### Arsitektur
 
@@ -204,56 +210,62 @@ Backend menggunakan **Socket.IO** untuk mengirim event real-time ke semua klien 
 | Event | Trigger | Data |
 |---|---|---|
 | `tickets:created` | Tiket baru dibuat | `{ ticket_id }` |
-| `tickets:updated` | Tiket diperbarui (status, priority, title, dll) | `{ ticket_id }` |
+| `tickets:updated` | Tiket diperbarui | `{ ticket_id }` |
 | `tickets:deleted` | Tiket dihapus | `{ ticket_id }` |
-| `comments:added` | Komentar baru ditambahkan | `{ ticket_id }` |
+| `comments:added` | Komentar baru | `{ ticket_id }` |
 
 ### Implementasi
 
-1. **server.js** — Membuat `http.Server` dan `Socket.IO` instance, menyimpannya ke `app.set('io', io)` agar bisa diakses dari controller.
-2. **socketEmitter.js** — Helper yang memanggil `io.emit(channel, event, data)` dengan format `${channel}:${event}`.
+1. **server.js** — Membuat `http.Server` dan `Socket.IO` instance, menyimpannya ke `app.set('io', io)`.
+2. **socketEmitter.js** — Helper yang memanggil `io.emit(channel, event, data)`.
 3. **Controller** — Setiap operasi create/update/delete memanggil `emit(req.app.get('io'), 'tickets', 'created', data)`.
-
-### Keunggulan dibanding Short-Polling
-- **0 delay** — Data langsung sampai tanpa menunggu interval 5 detik.
-- **Efisien** — Tidak ada HTTP request periodik yang membebani server.
-- **Real-time** — Update dari satu user langsung terlihat oleh user lain.
 
 ---
 
 ## Push Notification (Pusher Beams)
 
-Backend terintegrasi dengan **Pusher Beams** untuk mengirim notifikasi push ke browser pengguna.
+Backend terintegrasi dengan **Pusher Beams** untuk mengirim notifikasi push ke browser.
 
-- **Beams Auth** (`POST /api/pusher/beams-auth`) — Frontend memanggil endpoint ini setelah login untuk mendapatkan token autentikasi Pusher yang ditandatangani dengan `secretKey`.
-- **Publish on Events** — Saat tiket dibuat, notifikasi `"Tiket Baru Ditugaskan"` dikirim ke semua assignee. Saat tiket diperbarui (status/priority berubah), notifikasi `"Tiket Diperbarui"` dikirim ke creator dan assignee.
-- **Graceful degradation** — Jika credential Pusher tidak dikonfigurasi di `.env`, fitur push notification dinonaktifkan otomatis tanpa error.
-
----
-
-## Keputusan Teknis
-
-### 1. Query Metrik Dashboard Terpisah
-Pada `getDashboardMetrics`, query `total_tickets` dan `total_users` dijalankan secara **independen** (dua query berbeda). Ini memastikan `total_users` tetap mengembalikan nilai yang benar meskipun tabel `tickets` kosong.
-
-### 2. Multi-Assignee dengan Join Table
-Tiket dapat memiliki banyak assignee melalui tabel `ticket_assignments` (relasi N:N). Saat update, semua assignment lama dihapus lalu diganti dengan yang baru — semuanya dalam satu transaksi database.
-
-### 3. Socket.IO untuk Real-Time, Bukan Polling
-Awalnya menggunakan short-polling (fetch setiap 5/3 detik), sekarang menggunakan **Socket.IO** WebSocket untuk efisiensi dan kecepatan. Backend emit event saat data berubah, frontend langsung merespon tanpa interval.
-
-### 4. Transaksi Database
-Operasi yang memodifikasi banyak tabel (create/update ticket dengan assignments) dibungkus dalam `BEGIN` / `COMMIT` / `ROLLBACK` untuk menjaga atomicity data.
+- **Beams Auth** (`POST /api/pusher/beams-auth`) — Frontend memanggil endpoint ini setelah login untuk mendapatkan token autentikasi Pusher.
+- **Publish on Events** — Notifikasi dikirim ke assignee saat tiket dibuat/diperbarui.
+- **Graceful degradation** — Jika credential Pusher tidak dikonfigurasi, fitur dinonaktifkan otomatis.
 
 ---
 
-## Instalasi & Menjalankan
+## Database Migration
+
+Gunakan sistem migrasi untuk mengelola perubahan tabel. Setiap perubahan database dibuat sebagai file SQL di `src/migrations/`.
+
+### Menjalankan migrasi
+
+```bash
+npm run migrate
+```
+
+### Menambah migrasi baru
+
+Buat file baru di `src/migrations/` dengan format `NNN_deskripsi.sql`:
+
+```bash
+touch src/migrations/002_add_some_column.sql
+```
+
+Isi dengan query SQL, lalu jalankan:
+```bash
+npm run migrate
+```
+
+Hanya file baru yang akan dieksekusi. Riwayat tersimpan di tabel `_migrations`.
+
+---
+
+## Instalasi & Menjalankan (Development)
 
 1. Pastikan **Node.js v18+** dan **PostgreSQL** terinstall.
 
 2. Clone repositori dan masuk ke folder backend:
 ```bash
-cd backend
+cd ticket-be
 ```
 
 3. Pasang dependensi:
@@ -261,7 +273,7 @@ cd backend
 npm install
 ```
 
-4. Buat file `.env` di root folder backend:
+4. Buat file `.env`:
 ```env
 PORT=5001
 DATABASE_URL=postgresql://user:password@localhost:5432/it_support_tickets
@@ -269,14 +281,24 @@ JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRE=7d
 BCRYPT_ROUNDS=10
 
-# Pusher Beams (opsional — untuk push notification browser)
+# Pusher Beams (opsional)
 PUSHER_BEAMS_INSTANCE_ID=
 PUSHER_BEAMS_SECRET_KEY=
 ```
 
-5. Jalankan server (tabel database akan otomatis dibuat saat pertama kali):
+5. Buat database:
 ```bash
-npm run dev   # development (nodemon, auto-restart)
+createdb it_support_tickets
+```
+
+6. Jalankan migrasi:
+```bash
+npm run migrate
+```
+
+7. Jalankan server:
+```bash
+npm run dev   # development (nodemon)
 ```
 atau
 ```bash
@@ -284,3 +306,79 @@ npm start     # production
 ```
 
 Server akan berjalan di `http://localhost:5001`.
+
+---
+
+## Production Deployment
+
+### 1. Setup PM2
+
+```bash
+npm install pm2 --save-dev
+npx pm2 start src/server.js --name ticket-api
+npx pm2 save
+npx pm2 startup
+```
+
+### 2. Environment Production
+
+Tambahkan di `.env`:
+```
+NODE_ENV=production
+FRONTEND_URL=https://domain-anda.com
+```
+
+### 3. Nginx Reverse Proxy (Opsional)
+
+```nginx
+server {
+    listen 80;
+    server_name api.domain-anda.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:5001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+### 4. PM2 Commands
+
+```bash
+pm2 status              # Cek semua proses
+pm2 log ticket-api      # Lihat log
+pm2 restart ticket-api  # Restart
+pm2 stop ticket-api     # Stop
+pm2 delete ticket-api   # Hapus dari pm2
+```
+
+---
+
+## Keputusan Teknis
+
+### 1. Query Metrik Dashboard Terpisah
+Pada `getDashboardMetrics`, query `total_tickets` dan `total_users` dijalankan secara **independen** — memastikan `total_users` tetap benar meskipun tabel `tickets` kosong.
+
+### 2. Multi-Assignee dengan Join Table
+Tiket dapat memiliki banyak assignee melalui tabel `ticket_assignments` (relasi N:N). Update assignment dalam satu transaksi database.
+
+### 3. Socket.IO untuk Real-Time
+Menggunakan Socket.IO WebSocket — update instan tanpa polling.
+
+### 4. Transaksi Database
+Operasi create/update ticket dengan assignments dibungkus dalam `BEGIN`/`COMMIT`/`ROLLBACK`.
+
+### 5. Migration-based Schema Management
+Perubahan tabel dikelola via file SQL migration, bukan auto-init. Riwayat migrasi tersimpan di database.
