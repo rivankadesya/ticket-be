@@ -15,6 +15,7 @@ const validateCreateTicket = [
   body('title').notEmpty().trim().isLength({ min: 3 }),
   body('category').notEmpty().trim(),
   body('priority').isIn(['Low', 'Medium', 'High', 'Critical']),
+  body('status').optional().isIn(['Open', 'In Progress', 'Resolved', 'Closed']),
   body('description').optional().trim(),
 ];
 

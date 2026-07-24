@@ -11,14 +11,15 @@ const createTicket = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { title, description, category, priority, assigned_to } = req.body;
+    const { title, description, category, priority, status, assigned_to } = req.body;
     const created_by = req.userId;
+    const finalStatus = status || 'Open';
 
     await client.query('BEGIN');
 
     const result = await client.query(
-      'INSERT INTO tickets (title, description, category, priority, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [title, description, category, priority, created_by]
+      'INSERT INTO tickets (title, description, category, priority, status, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [title, description, category, priority, finalStatus, created_by]
     );
     const ticket = result.rows[0];
 
