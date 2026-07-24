@@ -58,7 +58,7 @@ const createTicket = async (req, res) => {
 
 const getTickets = async (req, res) => {
   try {
-    const { status, priority, category } = req.query;
+    const { status, priority, category, dateFrom, dateTo } = req.query;
     let query = `
       SELECT t.*, 
         u_created.name as created_by_name,
@@ -87,6 +87,14 @@ const getTickets = async (req, res) => {
     if (category) {
       query += ' AND t.category = $' + (params.length + 1);
       params.push(category);
+    }
+    if (dateFrom) {
+      query += ' AND t.created_at >= $' + (params.length + 1);
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      query += ' AND t.created_at < $' + (params.length + 1) + "::date + interval '1 day'";
+      params.push(dateTo);
     }
 
     query += ' GROUP BY t.id, u_created.name ORDER BY t.created_at DESC';

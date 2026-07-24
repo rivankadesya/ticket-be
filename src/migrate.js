@@ -1,62 +1,41 @@
-const fs = require('fs');
-const path = require('path');
-const pool = require('./config/database');
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const { Pool } = require('pg');
 
-const MIGRATIONS_TABLE = '_migrations';
+const DATABASE_URL = process.env.DATABASE_URL;
+const DB_NAME = DATABASE_URL.split('/').pop();
 
-const ensureMigrationsTable = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
-      id SERIAL PRIMARY KEY,
-      filename VARCHAR(255) UNIQUE NOT NULL,
-      executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+const ensureDatabase = async () => {
+  const baseUrl = DATABASE_URL.replace(`/${DB_NAME}`, '/postgres');
+  const tempPool = new Pool({ connectionString: baseUrl });
+
+  try {
+    const res = await tempPool.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [DB_NAME]);
+    if (res.rows.length === 0) {
+      await tempPool.query(`CREATE DATABASE "${DB_NAME}"`);
+      console.log(`Database "${DB_NAME}" created.`);
+    }
+  } finally {
+    await tempPool.end();
+  }
 };
 
-const getExecuted = async () => {
-  const result = await pool.query(`SELECT filename FROM ${MIGRATIONS_TABLE} ORDER BY id`);
-  return new Set(result.rows.map(r => r.filename));
-};
-
-const markExecuted = async (filename) => {
-  await pool.query(`INSERT INTO ${MIGRATIONS_TABLE} (filename) VALUES ($1)`, [filename]);
-};
-
-const migrate = async () => {
+const run = async () => {
   try {
     console.log('Running migrations...');
+    await ensureDatabase();
 
-    await ensureMigrationsTable();
-    const executed = await getExecuted();
+    const pool = new Pool({ connectionString: DATABASE_URL });
 
-    const dir = path.join(__dirname, 'migrations');
-    const files = fs.readdirSync(dir)
-      .filter(f => f.endsWith('.sql'))
-      .sort();
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-    let count = 0;
-
-    for (const file of files) {
-      if (executed.has(file)) {
-        console.log(`  SKIP ${file} — already executed`);
-        continue;
-      }
-
-      const sql = fs.readFileSync(path.join(dir, file), 'utf-8');
-      console.log(`  RUN  ${file}...`);
-
-      await pool.query(sql);
-      await markExecuted(file);
-      count++;
-    }
-
-    if (count === 0) {
-      console.log('All migrations up to date.');
-    } else {
-      console.log(`${count} migration(s) applied successfully.`);
-    }
-
+    console.log('Migrations up to date.');
+    await pool.end();
     process.exit(0);
   } catch (error) {
     console.error('Migration failed:', error);
@@ -64,4 +43,4 @@ const migrate = async () => {
   }
 };
 
-migrate();
+run();
