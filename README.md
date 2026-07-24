@@ -7,7 +7,7 @@
 
 <div align="center">
   <h1>🎫 IT Support Tickets — Backend API</h1>
-  <p><strong>REST API</strong> — autentikasi, manajemen tiket, komentar, metrik, real-time, push notification</p>
+  <p><strong>REST API</strong> — authentication, ticket management, comments, metrics, real-time, push notifications</p>
 
   <p>
     <a href="https://github.com/rivankadesya/ticket-be.git"><img src="https://img.shields.io/github/stars/rivankadesya/ticket-be?style=flat-square&label=Stars&color=yellow" /></a>
@@ -18,17 +18,17 @@
 
 ---
 
-## 📋 Daftar Isi
+## 📋 Table of Contents
 
 - [Clone Repository](#-clone-repository)
-- [Teknologi](#-teknologi)
-- [Struktur Folder](#-struktur-folder)
+- [Technologies](#-technologies)
+- [Folder Structure](#-folder-structure)
 - [Database](#-database)
 - [API Endpoints](#-api-endpoints)
-- [Instalasi](#-instalasi)
+- [Installation](#-installation)
 - [Database Migration](#-database-migration)
 - [Production Deployment](#-production-deployment)
-- [Keamanan](#-keamanan)
+- [Security](#-security)
 
 ---
 
@@ -43,18 +43,18 @@ cd ticket-be
 
 ---
 
-## 🛠️ Teknologi
+## 🛠️ Technologies
 
-| Teknologi | Versi | Kegunaan |
+| Technology | Version | Purpose |
 |---|---|---|
 | **Node.js** | 18+ | Runtime |
 | **Express.js** | 4 | Web framework |
 | **PostgreSQL** (pg) | 8 | Database |
 | **Socket.IO** | 4 | WebSocket real-time |
-| **JWT** (jsonwebtoken) | 9 | Autentikasi |
-| **bcryptjs** | 2 | Hashing password |
-| **express-validator** | 7 | Validasi input |
-| **helmet** | 7 | Keamanan HTTP |
+| **JWT** (jsonwebtoken) | 9 | Authentication |
+| **bcryptjs** | 2 | Password hashing |
+| **express-validator** | 7 | Input validation |
+| **helmet** | 7 | HTTP security |
 | **cors** | 2 | CORS |
 | **dotenv** | 16 | Environment config |
 | **Pusher Beams** | 2 | Push notification |
@@ -62,25 +62,25 @@ cd ticket-be
 
 ---
 
-## 📁 Struktur Folder
+## 📁 Folder Structure
 
 ```
 src/
 ├── config/
-│   └── database.js          # Koneksi pool PostgreSQL
+│   └── database.js          # PostgreSQL pool connection
 │
 ├── controllers/
 │   ├── authController.js    # Register, login, profile, password
-│   ├── ticketController.js  # CRUD tiket & metrik
-│   └── commentController.js # Komentar tiket
+│   ├── ticketController.js  # CRUD tickets & metrics
+│   └── commentController.js # Ticket comments
 │
 ├── middleware/
-│   └── auth.js              # Verify JWT + error handler
+│   └── auth.js              # JWT verify + error handler
 │
 ├── migrations/
-│   └── 001_initial.sql      # Migrasi database
+│   └── 001_initial.sql      # Database migration
 │
-├── migrate.js               # Runner migrasi
+├── migrate.js               # Migration runner
 │
 ├── routes/
 │   ├── authRoutes.js        # /api/auth/*
@@ -111,104 +111,104 @@ users ──1:N── tickets ──1:N── ticket_comments
   (ticket_assignments)
 ```
 
-### Tabel
+### Tables
 
 #### `users`
-| Kolom | Tipe | Keterangan |
+| Column | Type | Description |
 |---|---|---|
-| id | UUID (PK) | Auto-generate |
-| email | VARCHAR(255) UNIQUE | Email login |
-| password | VARCHAR(255) | Hash bcrypt |
-| name | VARCHAR(255) | Nama lengkap |
+| id | UUID (PK) | Auto-generated |
+| email | VARCHAR(255) UNIQUE | Login email |
+| password | VARCHAR(255) | bcrypt hash |
+| name | VARCHAR(255) | Full name |
 | role | VARCHAR(50) | `user` / `admin` |
-| is_active | BOOLEAN | Status akun |
-| created_at | TIMESTAMP | Otomatis |
-| updated_at | TIMESTAMP | Otomatis |
+| is_active | BOOLEAN | Account status |
+| created_at | TIMESTAMP | Auto |
+| updated_at | TIMESTAMP | Auto |
 
 #### `tickets`
-| Kolom | Tipe | Keterangan |
+| Column | Type | Description |
 |---|---|---|
-| id | UUID (PK) | Auto-generate |
-| title | VARCHAR(255) | Judul tiket |
-| description | TEXT | Deskripsi |
-| category | VARCHAR(100) | Kategori |
+| id | UUID (PK) | Auto-generated |
+| title | VARCHAR(255) | Ticket title |
+| description | TEXT | Description |
+| category | VARCHAR(100) | Category |
 | priority | VARCHAR(50) | Low/Medium/High/Critical |
 | status | VARCHAR(50) | Open/In Progress/Resolved/Closed |
-| created_by | UUID (FK) | Pembuat tiket |
-| created_at | TIMESTAMP | Otomatis |
-| updated_at | TIMESTAMP | Otomatis |
+| created_by | UUID (FK) | Ticket creator |
+| created_at | TIMESTAMP | Auto |
+| updated_at | TIMESTAMP | Auto |
 
 #### `ticket_assignments`
-| Kolom | Tipe | Keterangan |
+| Column | Type | Description |
 |---|---|---|
-| ticket_id | UUID (FK) | Tiket |
+| ticket_id | UUID (FK) | Ticket |
 | user_id | UUID (FK) | Assignee |
 
 #### `ticket_comments`
-| Kolom | Tipe | Keterangan |
+| Column | Type | Description |
 |---|---|---|
-| id | UUID (PK) | Auto-generate |
-| ticket_id | UUID (FK) | Tiket terkait |
-| user_id | UUID (FK) | Penulis |
-| comment | TEXT | Isi komentar |
-| created_at | TIMESTAMP | Otomatis |
-| updated_at | TIMESTAMP | Otomatis |
+| id | UUID (PK) | Auto-generated |
+| ticket_id | UUID (FK) | Related ticket |
+| user_id | UUID (FK) | Author |
+| comment | TEXT | Comment content |
+| created_at | TIMESTAMP | Auto |
+| updated_at | TIMESTAMP | Auto |
 
 ---
 
 ## 🔌 API Endpoints
 
-### Autentikasi — `/api/auth`
+### Auth — `/api/auth`
 
-| Method | Endpoint | Auth | Deskripsi |
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/auth/register` | ✗ | Registrasi |
+| POST | `/api/auth/register` | ✗ | Register user |
 | POST | `/api/auth/login` | ✗ | Login → JWT |
-| GET | `/api/auth/users` | ✓ | Daftar user |
-| GET | `/api/auth/me` | ✓ | Profile saya |
-| PUT | `/api/auth/profile` | ✓ | Update nama |
-| PUT | `/api/auth/password` | ✓ | Ganti password |
+| GET | `/api/auth/users` | ✓ | List users |
+| GET | `/api/auth/me` | ✓ | My profile |
+| PUT | `/api/auth/profile` | ✓ | Update name |
+| PUT | `/api/auth/password` | ✓ | Change password |
 
-### Tiket — `/api/tickets`
+### Tickets — `/api/tickets`
 
-| Method | Endpoint | Auth | Deskripsi |
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/tickets` | ✓ | Buat tiket |
-| GET | `/api/tickets` | ✓ | List tiket |
-| GET | `/api/tickets/metrics` | ✓ | Metrik dashboard |
-| GET | `/api/tickets/:id` | ✓ | Detail tiket |
-| PUT | `/api/tickets/:id` | ✓ | Update tiket |
-| DELETE | `/api/tickets/:id` | ✓ | Hapus tiket |
+| POST | `/api/tickets` | ✓ | Create ticket |
+| GET | `/api/tickets` | ✓ | List tickets |
+| GET | `/api/tickets/metrics` | ✓ | Dashboard metrics |
+| GET | `/api/tickets/:id` | ✓ | Ticket detail |
+| PUT | `/api/tickets/:id` | ✓ | Update ticket |
+| DELETE | `/api/tickets/:id` | ✓ | Delete ticket |
 
-### Komentar — `/api/tickets/:ticket_id/comments`
+### Comments — `/api/tickets/:ticket_id/comments`
 
-| Method | Endpoint | Auth | Deskripsi |
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/.../comments` | ✓ | Tambah komentar |
-| GET | `/.../comments` | ✓ | Ambil komentar |
+| POST | `/.../comments` | ✓ | Add comment |
+| GET | `/.../comments` | ✓ | Get comments |
 
 ### Pusher Beams — `/api/pusher`
 
-| Method | Endpoint | Auth | Deskripsi |
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/pusher/beams-auth` | ✓ | Auth token Pusher |
+| POST | `/api/pusher/beams-auth` | ✓ | Pusher auth token |
 
 ### Health Check
 
-| Method | Endpoint | Deskripsi |
+| Method | Endpoint | Description |
 |---|---|---|
-| GET | `/health` | Cek server hidup |
+| GET | `/health` | Server health check |
 
 ---
 
-## 🚀 Instalasi
+## 🚀 Installation
 
-### Prasyarat
+### Prerequisites
 
 - Node.js 18+
 - PostgreSQL 14+
 
-### Langkah
+### Steps
 
 ```bash
 git clone https://github.com/rivankadesya/ticket-be.git
@@ -216,7 +216,7 @@ cd ticket-be
 npm install
 ```
 
-Buat file `.env`:
+Create `.env` file:
 ```env
 PORT=5001
 DATABASE_URL=postgresql://user:password@localhost:5432/it_support_tickets
@@ -224,47 +224,47 @@ JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRE=7d
 BCRYPT_ROUNDS=10
 
-# Pusher Beams (opsional)
+# Pusher Beams (optional)
 PUSHER_BEAMS_INSTANCE_ID=
 PUSHER_BEAMS_SECRET_KEY=
 ```
 
-Buat database:
+Create database:
 ```bash
 createdb it_support_tickets
 ```
 
-Jalankan migrasi:
+Run migrations:
 ```bash
 npm run migrate
 ```
 
-Jalankan server:
+Start server:
 ```bash
 npm run dev     # development (nodemon)
-# atau
+# or
 npm start       # production
 ```
 
-Server di `http://localhost:5001`.
+Server at `http://localhost:5001`.
 
 ---
 
 ## 🔄 Database Migration
 
-### Menjalankan migrasi
+### Running migrations
 
 ```bash
 npm run migrate
 ```
 
-Hanya file **baru** yang akan dieksekusi. Riwayat tersimpan di tabel `_migrations`.
+Only **new** files will be executed. History stored in `_migrations` table.
 
-### Menambah migrasi baru
+### Adding a new migration
 
 ```bash
-touch src/migrations/002_deskripsi.sql
-# isi dengan SQL, lalu:
+touch src/migrations/002_description.sql
+# Fill with SQL, then:
 npm run migrate
 ```
 
@@ -283,10 +283,10 @@ npx pm2 startup
 
 ### Commands
 
-| Perintah | Fungsi |
+| Command | Function |
 |---|---|
-| `pm2 status` | Cek proses |
-| `pm2 log ticket-api` | Lihat log |
+| `pm2 status` | Check processes |
+| `pm2 log ticket-api` | View logs |
 | `pm2 restart ticket-api` | Restart |
 | `pm2 stop ticket-api` | Stop |
 
@@ -295,7 +295,7 @@ npx pm2 startup
 ```nginx
 server {
     listen 80;
-    server_name api.domain-anda.com;
+    server_name api.your-domain.com;
 
     location / {
         proxy_pass http://127.0.0.1:5001;
@@ -317,18 +317,18 @@ server {
 
 ---
 
-## 🔒 Keamanan
+## 🔒 Security
 
-- **Helmet** — Proteksi HTTP (XSS, clickjacking, dll)
-- **JWT** — Setiap endpoint (kecuali register/login) wajib `Authorization: Bearer <token>`
-- **bcryptjs** — Password di-hash sebelum disimpan
-- **Role-based access** — Hanya creator/admin/assignee bisa update; creator/admin bisa hapus
-- **Validasi input** — express-validator untuk semua input
-- **Parameterized queries** — Mencegah SQL injection
-- **Error Handler** — JSON response konsisten
+- **Helmet** — HTTP protection (XSS, clickjacking, etc.)
+- **JWT** — All endpoints (except register/login) require `Authorization: Bearer <token>`
+- **bcryptjs** — Password hashed before storage
+- **Role-based access** — Only creator/admin/assignee can update; creator/admin can delete
+- **Input validation** — express-validator for all inputs
+- **Parameterized queries** — Prevents SQL injection
+- **Error Handler** — Consistent JSON responses
 
 ---
 
 <p align="center">
-  Dibuat dengan ❤️ oleh <a href="https://github.com/rivankadesya">rivankadesya</a>
+  Made with ❤️ by <a href="https://github.com/rivankadesya">rivankadesya</a>
 </p>
