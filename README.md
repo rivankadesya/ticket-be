@@ -57,7 +57,6 @@ cd ticket-be
 | **helmet** | 7 | HTTP security |
 | **cors** | 2 | CORS |
 | **dotenv** | 16 | Environment config |
-| **Pusher Beams** | 2 | Push notification |
 | **pm2** | — | Process manager |
 
 ---
@@ -86,10 +85,8 @@ src/
 │   ├── authRoutes.js        # /api/auth/*
 │   ├── ticketRoutes.js      # /api/tickets/*
 │   ├── commentRoutes.js     # /api/tickets/:id/comments/*
-│   └── pusherRoutes.js      # /api/pusher/*
 │
 ├── services/
-│   ├── pusher.js            # Pusher Beams
 │   └── socketEmitter.js     # Socket.IO emitter
 │
 ├── utils/
@@ -186,12 +183,6 @@ users ──1:N── tickets ──1:N── ticket_comments
 |---|---|---|---|
 | POST | `/.../comments` | ✓ | Add comment |
 | GET | `/.../comments` | ✓ | Get comments |
-
-### Pusher Beams — `/api/pusher`
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/api/pusher/beams-auth` | ✓ | Pusher auth token |
 
 ### Health Check
 
