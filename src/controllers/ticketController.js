@@ -1,6 +1,5 @@
 const pool = require('../config/database');
 const { validationResult } = require('express-validator');
-const { publishToUsers } = require('../services/pusher');
 const { emit } = require('../services/socketEmitter');
 
 const createTicket = async (req, res) => {
@@ -36,12 +35,6 @@ const createTicket = async (req, res) => {
     await client.query('COMMIT');
 
     emit(req.app.get('io'), 'tickets', 'created', { ticket_id: ticket.id });
-
-    publishToUsers(
-      assigned_to,
-      'Tiket Baru Ditugaskan',
-      `"${title}" — prioritas ${priority}`
-    );
 
     res.status(201).json({
       message: 'Ticket created successfully',
@@ -233,23 +226,6 @@ const updateTicket = async (req, res) => {
     await client.query('COMMIT');
 
     emit(req.app.get('io'), 'tickets', 'updated', { ticket_id: id });
-
-    const updateTargets = [...new Set([
-      ticket.created_by,
-      ...(assigned_to || []),
-    ].filter(Boolean))];
-
-    const changeParts = [];
-    if (status) changeParts.push(`status → ${status}`);
-    if (priority) changeParts.push(`prioritas → ${priority}`);
-
-    if (changeParts.length > 0) {
-      publishToUsers(
-        updateTargets,
-        'Tiket Diperbarui',
-        `"${ticket.title}" — ${changeParts.join(', ')}`
-      );
-    }
 
     res.status(200).json({
       message: 'Ticket updated successfully',

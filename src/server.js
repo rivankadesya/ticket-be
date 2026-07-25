@@ -9,7 +9,6 @@ const { errorHandler } = require('./middleware/auth');
 const authRoutes = require('./routes/authRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const commentRoutes = require('./routes/commentRoutes');
-const pusherRoutes = require('./routes/pusherRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -41,7 +40,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/tickets', commentRoutes);
-app.use('/api/pusher', pusherRoutes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({ message: 'Server is running' });
