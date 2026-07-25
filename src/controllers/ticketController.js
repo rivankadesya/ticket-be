@@ -78,8 +78,9 @@ const getTickets = async (req, res) => {
       params.push(priority);
     }
     if (category) {
-      query += ' AND t.category = $' + (params.length + 1);
-      params.push(category);
+      const cats = Array.isArray(category) ? category : [category];
+      query += ' AND t.category = ANY($' + (params.length + 1) + ')';
+      params.push(cats);
     }
     if (dateFrom) {
       query += ' AND t.created_at >= $' + (params.length + 1);
